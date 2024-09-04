@@ -6,7 +6,7 @@
 
 Follow the link https://www.postgresql.org/download/ to download and install the suitable distribution of the database for your platform. 
 
-## Loading TPCH Data  
+## Loading TPCH Data using DBGEN
 
 ### Obtaining DBGEN
 1. Open the TPC webpage following the link: https://www.tpc.org/tpc_documents_current_versions/current_specifications5.asp  
@@ -24,5 +24,6 @@ Follow the link https://www.postgresql.org/download/ to download and install the
 TPCH 100MB (sf=0.1) data is provided at: https://github.com/ahanapradhan/UnionExtraction/blob/master/mysite/unmasque/test/experiments/data/tpch_tiny.zip  
 The load.sql file in the folder needs to be updated with the corresponding location of the data .csv files.
 
-## Loading TPCH Data using DuckDB
+## Loading TPCH Data using DuckDB (Easiest Way)
 https://duckdb.org/docs/extensions/tpch.html
+This approach is the fastest. However, your machine should have enough space to install DuckDB first!
