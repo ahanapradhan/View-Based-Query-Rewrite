@@ -12,10 +12,10 @@ using namespace std;
 
 // Represents a term in a predicate (variable or constant)
 struct Term {
-    std::string value;
+    string value;
     bool is_variable;
     
-    Term(const std::string& v = "", bool var = true) 
+    Term(const string& v = "", bool var = true) 
         : value(v), is_variable(var) {}
     
     bool operator==(const Term& other) const {
@@ -30,17 +30,17 @@ struct Term {
 
 // Represents a relational atom: R(t1, t2, ..., tn)
 struct Atom {
-    std::string relation;
-    std::vector<Term> terms;
+    string relation;
+    vector<Term> terms;
     
-    Atom(const std::string& rel = "") : relation(rel) {}
+    Atom(const string& rel = "") : relation(rel) {}
     
     void addTerm(const Term& t) {
         terms.push_back(t);
     }
     
-    std::string toString() const {
-        std::string result = relation + "(";
+    string toString() const {
+        string result = relation + "(";
         for (size_t i = 0; i < terms.size(); ++i) {
             if (i > 0) result += ", ";
             result += terms[i].value;
@@ -52,14 +52,14 @@ struct Atom {
 
 // Represents a conjunctive query: Q(head) :- body
 struct ConjunctiveQuery {
-    std::string name;
-    std::vector<Term> head;
-    std::vector<Atom> body;
+    string name;
+    vector<Term> head;
+    vector<Atom> body;
     
-    ConjunctiveQuery(const std::string& n = "") : name(n) {}
+    ConjunctiveQuery(const string& n = "") : name(n) {}
     
-    std::set<std::string> getVariables() const {
-        std::set<std::string> vars;
+    set<string> getVariables() const {
+        set<string> vars;
         for (const auto& t : head) {
             if (t.is_variable) vars.insert(t.value);
         }
@@ -71,16 +71,16 @@ struct ConjunctiveQuery {
         return vars;
     }
     
-    std::set<std::string> getHeadVariables() const {
-        std::set<std::string> vars;
+    set<string> getHeadVariables() const {
+        set<string> vars;
         for (const auto& t : head) {
             if (t.is_variable) vars.insert(t.value);
         }
         return vars;
     }
     
-    std::string toString() const {
-        std::string result = name + "(";
+    string toString() const {
+        string result = name + "(";
         for (size_t i = 0; i < head.size(); ++i) {
             if (i > 0) result += ", ";
             result += head[i].value;
@@ -95,17 +95,17 @@ struct ConjunctiveQuery {
 };
 
 // Variable mapping for homomorphism
-using Mapping = std::map<std::string, std::string>;
+using Mapping = map<string, string>;
 
 // MCD: MiniCon Description
 struct MCD {
     int view_index;
-    std::set<int> covered_subgoals;  // Indices of query subgoals covered
+    set<int> covered_subgoals;  // Indices of query subgoals covered
     Mapping variable_mapping;         // View variables -> Query variables
-    std::set<std::string> distinguished_vars; // Head variables of query covered
+    set<string> distinguished_vars; // Head variables of query covered
     
-    std::string toString() const {
-        std::stringstream ss;
+    string toString() const {
+        stringstream ss;
         ss << "View V" << view_index << " covers subgoals {";
         bool first = true;
         for (int sg : covered_subgoals) {
@@ -127,12 +127,12 @@ struct MCD {
 
 // Query Rewriting: a combination of views
 struct QueryRewriting {
-    std::vector<int> view_indices;
-    std::vector<Mapping> mappings;
-    std::set<int> covered_subgoals;
+    vector<int> view_indices;
+    vector<Mapping> mappings;
+    set<int> covered_subgoals;
     
-    std::string toString(const std::vector<ConjunctiveQuery>& views) const {
-        std::stringstream ss;
+    string toString(const vector<ConjunctiveQuery>& views) const {
+        stringstream ss;
         ss << "Q_rewritten(";
         
         // Build head based on original query structure
@@ -146,7 +146,7 @@ struct QueryRewriting {
             const auto& view = views[view_indices[i]];
             for (size_t j = 0; j < view.head.size(); ++j) {
                 if (j > 0) ss << ", ";
-                const std::string& var = view.head[j].value;
+                const string& var = view.head[j].value;
                 if (mappings[i].find(var) != mappings[i].end()) {
                     ss << mappings[i].at(var);
                 } else {
@@ -159,9 +159,9 @@ struct QueryRewriting {
         return ss.str();
     }
     
-    std::string toSQL(const std::vector<ConjunctiveQuery>& views, 
+    string toSQL(const vector<ConjunctiveQuery>& views, 
                       const ConjunctiveQuery& original_query) const {
-        std::stringstream ss;
+        stringstream ss;
         ss << "SELECT ";
         
         // Build SELECT clause from original query head
@@ -210,25 +210,25 @@ struct QueryRewriting {
 
 class Utils {
 public:
-    static std::string trim(const std::string& s) {
+    static string trim(const string& s) {
         size_t start = s.find_first_not_of(" \t\n\r");
         size_t end = s.find_last_not_of(" \t\n\r");
-        if (start == std::string::npos) return "";
+        if (start == string::npos) return "";
         return s.substr(start, end - start + 1);
     }
     
-    static std::string toLower(std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), 
-                      [](unsigned char c){ return std::tolower(c); });
+    static string toLower(string s) {
+        transform(s.begin(), s.end(), s.begin(), 
+                      [](unsigned char c){ return tolower(c); });
         return s;
     }
     
-    static std::vector<std::string> split(const std::string& s, char delim) {
-        std::vector<std::string> result;
-        std::stringstream ss(s);
-        std::string item;
-        while (std::getline(ss, item, delim)) {
-            std::string trimmed = trim(item);
+    static vector<string> split(const string& s, char delim) {
+        vector<string> result;
+        stringstream ss(s);
+        string item;
+        while (getline(ss, item, delim)) {
+            string trimmed = trim(item);
             if (!trimmed.empty()) {
                 result.push_back(trimmed);
             }
@@ -236,12 +236,12 @@ public:
         return result;
     }
     
-    static std::vector<std::string> split(const std::string& s, const std::string& delim) {
-        std::vector<std::string> result;
+    static vector<string> split(const string& s, const string& delim) {
+        vector<string> result;
         size_t start = 0;
         size_t end = s.find(delim);
         
-        while (end != std::string::npos) {
+        while (end != string::npos) {
             result.push_back(trim(s.substr(start, end - start)));
             start = end + delim.length();
             end = s.find(delim, start);
@@ -258,33 +258,33 @@ public:
 class SQLToConjunctiveQuery {
 private:
     struct SQLParsed {
-        std::vector<std::string> select_attrs;
-        std::vector<std::string> tables;
-        std::vector<std::pair<std::string, std::string>> joins;
-        std::map<std::string, std::string> table_aliases;
+        vector<string> select_attrs;
+        vector<string> tables;
+        vector<pair<string, string>> joins;
+        map<string, string> table_aliases;
     };
     
-    SQLParsed parseSQL(const std::string& sql) {
+    SQLParsed parseSQL(const string& sql) {
         SQLParsed parsed;
-        std::string sql_lower = Utils::toLower(sql);
+        string sql_lower = Utils::toLower(sql);
         
         // Find SELECT, FROM, WHERE positions
         size_t select_pos = sql_lower.find("select");
         size_t from_pos = sql_lower.find("from");
         size_t where_pos = sql_lower.find("where");
         
-        if (select_pos == std::string::npos || from_pos == std::string::npos) {
-            std::cerr << "Invalid SQL: missing SELECT or FROM\n";
+        if (select_pos == string::npos || from_pos == string::npos) {
+            cerr << "Invalid SQL: missing SELECT or FROM\n";
             return parsed;
         }
         
         // Parse SELECT clause
-        std::string select_clause = sql.substr(select_pos + 6, from_pos - select_pos - 6);
+        string select_clause = sql.substr(select_pos + 6, from_pos - select_pos - 6);
         parsed.select_attrs = Utils::split(select_clause, ',');
         
         // Parse FROM clause
-        std::string from_clause;
-        if (where_pos != std::string::npos) {
+        string from_clause;
+        if (where_pos != string::npos) {
             from_clause = sql.substr(from_pos + 4, where_pos - from_pos - 4);
         } else {
             from_clause = sql.substr(from_pos + 4);
@@ -297,22 +297,22 @@ private:
                 parsed.tables.push_back(tokens[0]);
                 if (tokens.size() >= 2) {
                     // Handle alias (e.g., "Customer c" or "Customer AS c")
-                    std::string alias = tokens.back();
+                    string alias = tokens.back();
                     parsed.table_aliases[alias] = tokens[0];
                 }
             }
         }
         
         // Parse WHERE clause
-        if (where_pos != std::string::npos) {
-            std::string where_clause = sql.substr(where_pos + 5);
-            auto predicates = Utils::split(where_clause, "and");
+        if (where_pos != string::npos) {
+            string where_clause = sql.substr(where_pos + 5);
+            auto predicates = Utils::split(where_clause, "AND");
             
             for (const auto& pred : predicates) {
                 size_t eq_pos = pred.find('=');
-                if (eq_pos != std::string::npos) {
-                    std::string left = Utils::trim(pred.substr(0, eq_pos));
-                    std::string right = Utils::trim(pred.substr(eq_pos + 1));
+                if (eq_pos != string::npos) {
+                    string left = Utils::trim(pred.substr(0, eq_pos));
+                    string right = Utils::trim(pred.substr(eq_pos + 1));
                     parsed.joins.push_back({left, right});
                 }
             }
@@ -322,29 +322,29 @@ private:
     }
     
     // Extract table and attribute from qualified name (e.g., "customer.name" -> {"customer", "name"})
-    std::pair<std::string, std::string> splitQualifiedName(const std::string& name) {
+    pair<string, string> splitQualifiedName(const string& name) {
         size_t dot_pos = name.find('.');
-        if (dot_pos != std::string::npos) {
+        if (dot_pos != string::npos) {
             return {name.substr(0, dot_pos), name.substr(dot_pos + 1)};
         }
         return {"", name};
     }
     
     // Generate variable name for an attribute
-    std::string generateVarName(const std::string& attr, 
-                               std::map<std::string, std::string>& attr_to_var,
+    string generateVarName(const string& attr, 
+                               map<string, string>& attr_to_var,
                                int& var_counter) {
         if (attr_to_var.find(attr) != attr_to_var.end()) {
             return attr_to_var[attr];
         }
         
-        std::string var = "v" + std::to_string(var_counter++);
+        string var = "v" + to_string(var_counter++);
         attr_to_var[attr] = var;
         return var;
     }
     
 public:
-    ConjunctiveQuery convert(const std::string& sql, const std::string& query_name = "Q") {
+    ConjunctiveQuery convert(const string& sql, const string& query_name = "Q") {
         ConjunctiveQuery cq(query_name);
         SQLParsed parsed = parseSQL(sql);
         
@@ -353,16 +353,16 @@ public:
         }
         
         // Map attributes to variables
-        std::map<std::string, std::string> attr_to_var;
+        map<string, string> attr_to_var;
         int var_counter = 1;
         
         // Build a map of which attributes belong to which tables
-        std::map<std::string, std::vector<std::string>> table_attrs;
+        map<string, vector<string>> table_attrs;
         
         // Process SELECT attributes for head
         for (const auto& attr : parsed.select_attrs) {
             auto [table, attr_name] = splitQualifiedName(attr);
-            std::string var = generateVarName(attr, attr_to_var, var_counter);
+            string var = generateVarName(attr, attr_to_var, var_counter);
             cq.head.push_back(Term(var, true));
             
             if (!table.empty()) {
@@ -387,8 +387,8 @@ public:
                 right_table = parsed.table_aliases[right_table];
             }
             
-            std::string left_var = generateVarName(left, attr_to_var, var_counter);
-            std::string right_var = generateVarName(right, attr_to_var, var_counter);
+            string left_var = generateVarName(left, attr_to_var, var_counter);
+            string right_var = generateVarName(right, attr_to_var, var_counter);
             
             // Make sure they map to the same variable (join condition)
             if (left_var != right_var) {
@@ -416,11 +416,11 @@ public:
         
         // Create atoms for each table
         for (const auto& table : parsed.tables) {
-            std::string resolved_table = table;
+            string resolved_table = table;
             Atom atom(resolved_table);
             
             // Get all attributes for this table
-            std::set<std::string> table_vars;
+            set<string> table_vars;
             for (const auto& [attr, var] : attr_to_var) {
                 auto [t, a] = splitQualifiedName(attr);
                 if (parsed.table_aliases.find(t) != parsed.table_aliases.end()) {
@@ -462,8 +462,8 @@ public:
 class MiniCon {
 public:
     ConjunctiveQuery query;
-    std::vector<ConjunctiveQuery> views;
-    std::vector<MCD> mcds;
+    vector<ConjunctiveQuery> views;
+    vector<MCD> mcds;
     
     // Check if a mapping is consistent (no conflicts)
     bool isConsistentMapping(const Mapping& m1, const Mapping& m2) {
@@ -604,9 +604,9 @@ public:
     }
     
     // Check if a combination of MCDs covers all subgoals and head variables
-    bool isValidRewriting(const std::vector<MCD>& mcd_combo) {
-        std::set<int> all_covered;
-        std::set<std::string> all_distinguished;
+    bool isValidRewriting(const vector<MCD>& mcd_combo) {
+        set<int> all_covered;
+        set<string> all_distinguished;
         
         for (const auto& mcd : mcd_combo) {
             all_covered.insert(mcd.covered_subgoals.begin(), 
@@ -640,13 +640,13 @@ public:
     }
     
     // Generate all combinations of MCDs
-    void generateRewritings(std::vector<QueryRewriting>& rewritings) {
+    void generateRewritings(vector<QueryRewriting>& rewritings) {
         int n_subgoals = query.body.size();
         
         // Generate all subsets of MCDs
         int n_mcds = mcds.size();
         for (int mask = 1; mask < (1 << n_mcds); ++mask) {
-            std::vector<MCD> combo;
+            vector<MCD> combo;
             
             for (int i = 0; i < n_mcds; ++i) {
                 if (mask & (1 << i)) {
@@ -687,7 +687,7 @@ public:
         views.push_back(v);
     }
     
-    std::vector<QueryRewriting> rewrite() {
+    vector<QueryRewriting> rewrite() {
         mcds.clear();
         
         cout << "\n=== Step 1: Finding MCDs for each view ===\n";
@@ -727,7 +727,7 @@ public:
         
         cout << "\n=== Step 2: Combining MCDs to form rewritings ===\n";
         // Generate rewritings
-        std::vector<QueryRewriting> rewritings;
+        vector<QueryRewriting> rewritings;
         generateRewritings(rewritings);
         
         return rewritings;
@@ -751,13 +751,13 @@ void paperExample(SQLToConjunctiveQuery converter) {
     cout << "\n\n### Example 5: TPC-H Style Query ###\n";
     cout << "------------------------------------\n";
 
-    std::string sql_q = "SELECT c.name, s.name, n.name "
+    string sql_q = "SELECT c.name, s.name, n.name "
                         "FROM Supplier s, Customer c, Nation n "
                         "WHERE c.nationkey = s.nationkey AND s.nationkey = n.nationkey AND n.nationkey = c.nationkey";
-    std::string sql_v2 = "SELECT c.nationkey, c.name, n.name FROM Customer c, Nation n "
+    string sql_v2 = "SELECT c.nationkey, c.name, n.name FROM Customer c, Nation n "
                          "WHERE c.nationkey = n.nationkey";
-    std::string sql_v1 = "SELECT c.nationkey, c.name FROM Customer c";
-    std::string sql_v3 = "SELECT c.nationkey, c.name, s.name FROM Customer c, Supplier s "
+    string sql_v1 = "SELECT c.nationkey, c.name FROM Customer c";
+    string sql_v3 = "SELECT c.nationkey, c.name, s.name FROM Customer c, Supplier s "
                          "WHERE c.nationkey = s.nationkey";
 
     cout << "Query SQL:\n  " << sql_q << "\n";
@@ -766,10 +766,10 @@ void paperExample(SQLToConjunctiveQuery converter) {
     cout << "View V10 SQL: " << sql_v3 << "\n\n";
 
     MiniCon minicom;
-    ConjunctiveQuery q("Q(v1, v2, v3) :- Supplier(v2, v4), Customer(v1, v4), Nation(v3, v4)");// = converter.convert(sql_q, "Q");
-    ConjunctiveQuery v2 = converter.convert(sql_v2, "V8");
+    ConjunctiveQuery q = converter.convert(sql_q, "Q");
+    ConjunctiveQuery v2 = converter.convert(sql_v2, "V2");
     ConjunctiveQuery v1 = converter.convert(sql_v1, "V1");
-    ConjunctiveQuery v3 = converter.convert(sql_v3, "V10");
+    ConjunctiveQuery v3 = converter.convert(sql_v3, "V3");
 
     cout << q.toString() << endl;
     cout << v2.toString() << endl;
@@ -810,9 +810,9 @@ int main() {
     cout << "\n\n### Example 1: Classic Join Query ###\n";
     cout << "-------------------------------------\n";
     
-    std::string sql_q1 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
-    std::string sql_v1 = "SELECT R.x, R.y FROM R";
-    std::string sql_v2 = "SELECT S.y, S.z FROM S";
+    string sql_q1 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
+    string sql_v1 = "SELECT R.x, R.y FROM R";
+    string sql_v2 = "SELECT S.y, S.z FROM S";
     
     cout << "Query SQL: " << sql_q1 << "\n";
     cout << "View V1 SQL: " << sql_v1 << "\n";
@@ -844,8 +844,8 @@ int main() {
     cout << "\n\n### Example 2: Pre-Joined View ###\n";
     cout << "-----------------------------------\n";
     
-    std::string sql_q2 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
-    std::string sql_v3 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
+    string sql_q2 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
+    string sql_v3 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
     
     cout << "Query SQL: " << sql_q2 << "\n";
     cout << "View V3 SQL: " << sql_v3 << "\n\n";
@@ -874,12 +874,12 @@ int main() {
     cout << "\n\n### Example 3: Complex Query (Paper Example) ###\n";
     cout << "-----------------------------------------------\n";
     
-    std::string sql_q3 = "SELECT c.name, n.name, s.name "
+    string sql_q3 = "SELECT c.name, n.name, s.name "
                         "FROM Customer c, Nation n, Supplier s "
                         "WHERE c.nationkey = n.nationkey AND n.nationkey = s.nationkey";
-    std::string sql_v4 = "SELECT c.name, c.nationkey FROM Customer c";
-    std::string sql_v5 = "SELECT n.nationkey, n.name FROM Nation n";
-    std::string sql_v6 = "SELECT s.name, s.nationkey FROM Supplier s";
+    string sql_v4 = "SELECT c.name, c.nationkey FROM Customer c";
+    string sql_v5 = "SELECT n.nationkey, n.name FROM Nation n";
+    string sql_v6 = "SELECT s.name, s.nationkey FROM Supplier s";
     
     cout << "Query SQL:\n  " << sql_q3 << "\n";
     cout << "View V4 SQL: " << sql_v4 << "\n";
@@ -914,8 +914,8 @@ int main() {
     cout << "\n\n### Example 4: No Valid Rewriting ###\n";
     cout << "-------------------------------------\n";
     
-    std::string sql_q4 = "SELECT R.x, R.y FROM R, S WHERE R.y = S.y";
-    std::string sql_v7 = "SELECT R.x FROM R";
+    string sql_q4 = "SELECT R.x, R.y FROM R, S WHERE R.y = S.y";
+    string sql_v7 = "SELECT R.x FROM R";
     
     cout << "Query SQL: " << sql_q4 << "\n";
     cout << "View V7 SQL: " << sql_v7 << "\n\n";
@@ -943,12 +943,12 @@ int main() {
     cout << "\n\n### Example 5: TPC-H Style Query ###\n";
     cout << "------------------------------------\n";
     
-    std::string sql_q5 = "SELECT o.orderkey, c.name, l.quantity "
+    string sql_q5 = "SELECT o.orderkey, c.name, l.quantity "
                         "FROM Orders o, Customer c, LineItem l "
                         "WHERE o.custkey = c.custkey AND o.orderkey = l.orderkey";
-    std::string sql_v8 = "SELECT o.orderkey, o.custkey FROM Orders o";
-    std::string sql_v9 = "SELECT c.custkey, c.name FROM Customer c";
-    std::string sql_v10 = "SELECT l.orderkey, l.quantity FROM LineItem l";
+    string sql_v8 = "SELECT o.orderkey, o.custkey FROM Orders o";
+    string sql_v9 = "SELECT c.custkey, c.name FROM Customer c";
+    string sql_v10 = "SELECT l.orderkey, l.quantity FROM LineItem l";
     
     cout << "Query SQL:\n  " << sql_q5 << "\n";
     cout << "View V8 SQL: " << sql_v8 << "\n";
