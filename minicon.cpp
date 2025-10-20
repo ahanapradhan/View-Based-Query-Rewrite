@@ -462,7 +462,7 @@ public:
 // ============================================================================
 
 class MiniCon {
-private:
+public:
     ConjunctiveQuery query;
     std::vector<ConjunctiveQuery> views;
     std::vector<MCD> mcds;
@@ -678,7 +678,6 @@ private:
     }
     
 public:
-    std::vector<ConjunctiveQuery> views; // Make public for rewriting output
     ConjunctiveQuery query_cq; // Store original query for SQL output
     
     void setQuery(const ConjunctiveQuery& q) {
