@@ -5,9 +5,7 @@
 #include <set>
 #include <algorithm>
 #include <sstream>
-#include <memory>
-#include <cctype>
-
+using namespace std;
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
@@ -692,42 +690,42 @@ public:
     std::vector<QueryRewriting> rewrite() {
         mcds.clear();
         
-        std::cout << "\n=== Step 1: Finding MCDs for each view ===\n";
+        cout << "\n=== Step 1: Finding MCDs for each view ===\n";
         // Find all MCDs
         for (size_t i = 0; i < views.size(); ++i) {
-            std::cout << "\nProcessing View " << i << ": " 
+            cout << "\nProcessing View " << i << ": " 
                      << views[i].toString() << "\n";
             findMCDsForView(i);
         }
         
-        std::cout << "\nFound " << mcds.size() << " MCDs:\n";
+        cout << "\nFound " << mcds.size() << " MCDs:\n";
         for (size_t i = 0; i < mcds.size(); ++i) {
-            std::cout << "  MCD " << i << ": View V" << mcds[i].view_index 
+            cout << "  MCD " << i << ": View V" << mcds[i].view_index 
                      << " covers subgoals {";
             bool first = true;
             for (int sg : mcds[i].covered_subgoals) {
-                if (!first) std::cout << ", ";
-                std::cout << sg;
+                if (!first) cout << ", ";
+                cout << sg;
                 first = false;
             }
-            std::cout << "}\n    Mapping: {";
+            cout << "}\n    Mapping: {";
             first = true;
             for (const auto& [v, q] : mcds[i].variable_mapping) {
-                if (!first) std::cout << ", ";
-                std::cout << v << "->" << q;
+                if (!first) cout << ", ";
+                cout << v << "->" << q;
                 first = false;
             }
-            std::cout << "}\n    Distinguished vars: {";
+            cout << "}\n    Distinguished vars: {";
             first = true;
             for (const auto& dv : mcds[i].distinguished_vars) {
-                if (!first) std::cout << ", ";
-                std::cout << dv;
+                if (!first) cout << ", ";
+                cout << dv;
                 first = false;
             }
-            std::cout << "}\n";
+            cout << "}\n";
         }
         
-        std::cout << "\n=== Step 2: Combining MCDs to form rewritings ===\n";
+        cout << "\n=== Step 2: Combining MCDs to form rewritings ===\n";
         // Generate rewritings
         std::vector<QueryRewriting> rewritings;
         generateRewritings(rewritings);
@@ -736,16 +734,66 @@ public:
     }
     
     void printQuery() const {
-        std::cout << "Query: " << query.toString() << "\n";
+        cout << "Query: " << query.toString() << "\n";
     }
     
     void printViews() const {
-        std::cout << "Views:\n";
+        cout << "Views:\n";
         for (size_t i = 0; i < views.size(); ++i) {
-            std::cout << "  V" << i << ": " << views[i].toString() << "\n";
+            cout << "  V" << i << ": " << views[i].toString() << "\n";
         }
     }
 };
+
+
+void paperExample(SQLToConjunctiveQuery converter) {
+    // Example 6: TPC-H style paper query
+    cout << "\n\n### Example 5: TPC-H Style Query ###\n";
+    cout << "------------------------------------\n";
+
+    std::string sql_q = "SELECT c.name, s.name, n.name "
+                        "FROM Supplier s, Customer c, Nation n "
+                        "WHERE c.nationkey = s.nationkey AND s.nationkey = n.nationkey AND n.nationkey = c.nationkey";
+    std::string sql_v2 = "SELECT c.nationkey, c.name, n.name FROM Customer c, Nation n "
+                         "WHERE c.nationkey = n.nationkey";
+    std::string sql_v1 = "SELECT c.nationkey, c.name FROM Customer c";
+    std::string sql_v3 = "SELECT c.nationkey, c.name, s.name FROM Customer c, Supplier s "
+                         "WHERE c.nationkey = s.nationkey";
+
+    cout << "Query SQL:\n  " << sql_q << "\n";
+    cout << "View V8 SQL: " << sql_v2 << "\n";
+    cout << "View V9 SQL: " << sql_v1 << "\n";
+    cout << "View V10 SQL: " << sql_v3 << "\n\n";
+
+    MiniCon minicom;
+    ConjunctiveQuery q("Q(v1, v2, v3) :- Supplier(v2, v4), Customer(v1, v4), Nation(v3, v4)");// = converter.convert(sql_q, "Q");
+    ConjunctiveQuery v2 = converter.convert(sql_v2, "V8");
+    ConjunctiveQuery v1 = converter.convert(sql_v1, "V1");
+    ConjunctiveQuery v3 = converter.convert(sql_v3, "V10");
+
+    cout << q.toString() << endl;
+    cout << v2.toString() << endl;
+    cout << v1.toString() << endl;
+    cout << v3.toString() << endl;
+
+    minicom.setQuery(q);
+    minicom.addView(v2);
+    minicom.addView(v1);
+    minicom.addView(v3);
+
+    cout << "Converted to Conjunctive Queries:\n";
+    minicom.printQuery();
+    minicom.printViews();
+
+    auto rewritings = minicom.rewrite();
+
+    cout << "\n=== Rewritings Found: " << rewritings.size() << " ===\n";
+    for (size_t i = 0; i < rewritings.size(); ++i) {
+        cout << "\nRewriting " << i + 1 << ":\n";
+        cout << "  Conjunctive form: " << rewritings[i].toString(minicom.views) << "\n";
+        cout << "  SQL form: " << rewritings[i].toSQL(minicom.views, q) << "\n";
+    }
+}
 
 // ============================================================================
 // MAIN - EXAMPLES
@@ -754,21 +802,21 @@ public:
 int main() {
     SQLToConjunctiveQuery converter;
     
-    std::cout << "=================================================\n";
-    std::cout << "  MiniCon Algorithm for Query Rewriting (SQL)\n";
-    std::cout << "=================================================\n";
+    cout << "=================================================\n";
+    cout << "  MiniCon Algorithm for Query Rewriting (SQL)\n";
+    cout << "=================================================\n";
     
-    // Example 1: Classic join query
-    std::cout << "\n\n### Example 1: Classic Join Query ###\n";
-    std::cout << "-------------------------------------\n";
+   /* // Example 1: Classic join query
+    cout << "\n\n### Example 1: Classic Join Query ###\n";
+    cout << "-------------------------------------\n";
     
     std::string sql_q1 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
     std::string sql_v1 = "SELECT R.x, R.y FROM R";
     std::string sql_v2 = "SELECT S.y, S.z FROM S";
     
-    std::cout << "Query SQL: " << sql_q1 << "\n";
-    std::cout << "View V1 SQL: " << sql_v1 << "\n";
-    std::cout << "View V2 SQL: " << sql_v2 << "\n\n";
+    cout << "Query SQL: " << sql_q1 << "\n";
+    cout << "View V1 SQL: " << sql_v1 << "\n";
+    cout << "View V2 SQL: " << sql_v2 << "\n\n";
     
     MiniCon minicon1;
     ConjunctiveQuery q1 = converter.convert(sql_q1, "Q");
@@ -779,28 +827,28 @@ int main() {
     minicon1.addView(v1);
     minicon1.addView(v2);
     
-    std::cout << "Converted to Conjunctive Queries:\n";
+    cout << "Converted to Conjunctive Queries:\n";
     minicon1.printQuery();
     minicon1.printViews();
     
     auto rewritings1 = minicon1.rewrite();
     
-    std::cout << "\n=== Rewritings Found: " << rewritings1.size() << " ===\n";
+    cout << "\n=== Rewritings Found: " << rewritings1.size() << " ===\n";
     for (size_t i = 0; i < rewritings1.size(); ++i) {
-        std::cout << "\nRewriting " << i + 1 << ":\n";
-        std::cout << "  Conjunctive form: " << rewritings1[i].toString(minicon1.views) << "\n";
-        std::cout << "  SQL form: " << rewritings1[i].toSQL(minicon1.views, q1) << "\n";
+        cout << "\nRewriting " << i + 1 << ":\n";
+        cout << "  Conjunctive form: " << rewritings1[i].toString(minicon1.views) << "\n";
+        cout << "  SQL form: " << rewritings1[i].toSQL(minicon1.views, q1) << "\n";
     }
     
     // Example 2: Pre-joined view
-    std::cout << "\n\n### Example 2: Pre-Joined View ###\n";
-    std::cout << "-----------------------------------\n";
+    cout << "\n\n### Example 2: Pre-Joined View ###\n";
+    cout << "-----------------------------------\n";
     
     std::string sql_q2 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
     std::string sql_v3 = "SELECT R.x, S.z FROM R, S WHERE R.y = S.y";
     
-    std::cout << "Query SQL: " << sql_q2 << "\n";
-    std::cout << "View V3 SQL: " << sql_v3 << "\n\n";
+    cout << "Query SQL: " << sql_q2 << "\n";
+    cout << "View V3 SQL: " << sql_v3 << "\n\n";
     
     MiniCon minicon2;
     ConjunctiveQuery q2 = converter.convert(sql_q2, "Q");
@@ -809,22 +857,22 @@ int main() {
     minicon2.setQuery(q2);
     minicon2.addView(v3);
     
-    std::cout << "Converted to Conjunctive Queries:\n";
+    cout << "Converted to Conjunctive Queries:\n";
     minicon2.printQuery();
     minicon2.printViews();
     
     auto rewritings2 = minicon2.rewrite();
     
-    std::cout << "\n=== Rewritings Found: " << rewritings2.size() << " ===\n";
+    cout << "\n=== Rewritings Found: " << rewritings2.size() << " ===\n";
     for (size_t i = 0; i < rewritings2.size(); ++i) {
-        std::cout << "\nRewriting " << i + 1 << ":\n";
-        std::cout << "  Conjunctive form: " << rewritings2[i].toString(minicon2.views) << "\n";
-        std::cout << "  SQL form: " << rewritings2[i].toSQL(minicon2.views, q2) << "\n";
+        cout << "\nRewriting " << i + 1 << ":\n";
+        cout << "  Conjunctive form: " << rewritings2[i].toString(minicon2.views) << "\n";
+        cout << "  SQL form: " << rewritings2[i].toSQL(minicon2.views, q2) << "\n";
     }
     
     // Example 3: Complex query (similar to paper example)
-    std::cout << "\n\n### Example 3: Complex Query (Paper Example) ###\n";
-    std::cout << "-----------------------------------------------\n";
+    cout << "\n\n### Example 3: Complex Query (Paper Example) ###\n";
+    cout << "-----------------------------------------------\n";
     
     std::string sql_q3 = "SELECT c.name, n.name, s.name "
                         "FROM Customer c, Nation n, Supplier s "
@@ -833,10 +881,10 @@ int main() {
     std::string sql_v5 = "SELECT n.nationkey, n.name FROM Nation n";
     std::string sql_v6 = "SELECT s.name, s.nationkey FROM Supplier s";
     
-    std::cout << "Query SQL:\n  " << sql_q3 << "\n";
-    std::cout << "View V4 SQL: " << sql_v4 << "\n";
-    std::cout << "View V5 SQL: " << sql_v5 << "\n";
-    std::cout << "View V6 SQL: " << sql_v6 << "\n\n";
+    cout << "Query SQL:\n  " << sql_q3 << "\n";
+    cout << "View V4 SQL: " << sql_v4 << "\n";
+    cout << "View V5 SQL: " << sql_v5 << "\n";
+    cout << "View V6 SQL: " << sql_v6 << "\n\n";
     
     MiniCon minicon3;
     ConjunctiveQuery q3 = converter.convert(sql_q3, "Q");
@@ -849,28 +897,28 @@ int main() {
     minicon3.addView(v5);
     minicon3.addView(v6);
     
-    std::cout << "Converted to Conjunctive Queries:\n";
+    cout << "Converted to Conjunctive Queries:\n";
     minicon3.printQuery();
     minicon3.printViews();
     
     auto rewritings3 = minicon3.rewrite();
     
-    std::cout << "\n=== Rewritings Found: " << rewritings3.size() << " ===\n";
+    cout << "\n=== Rewritings Found: " << rewritings3.size() << " ===\n";
     for (size_t i = 0; i < rewritings3.size(); ++i) {
-        std::cout << "\nRewriting " << i + 1 << ":\n";
-        std::cout << "  Conjunctive form: " << rewritings3[i].toString(minicon3.views) << "\n";
-        std::cout << "  SQL form: " << rewritings3[i].toSQL(minicon3.views, q3) << "\n";
+        cout << "\nRewriting " << i + 1 << ":\n";
+        cout << "  Conjunctive form: " << rewritings3[i].toString(minicon3.views) << "\n";
+        cout << "  SQL form: " << rewritings3[i].toSQL(minicon3.views, q3) << "\n";
     }
     
     // Example 4: No valid rewriting
-    std::cout << "\n\n### Example 4: No Valid Rewriting ###\n";
-    std::cout << "-------------------------------------\n";
+    cout << "\n\n### Example 4: No Valid Rewriting ###\n";
+    cout << "-------------------------------------\n";
     
     std::string sql_q4 = "SELECT R.x, R.y FROM R, S WHERE R.y = S.y";
     std::string sql_v7 = "SELECT R.x FROM R";
     
-    std::cout << "Query SQL: " << sql_q4 << "\n";
-    std::cout << "View V7 SQL: " << sql_v7 << "\n\n";
+    cout << "Query SQL: " << sql_q4 << "\n";
+    cout << "View V7 SQL: " << sql_v7 << "\n\n";
     
     MiniCon minicon4;
     ConjunctiveQuery q4 = converter.convert(sql_q4, "Q");
@@ -879,21 +927,21 @@ int main() {
     minicon4.setQuery(q4);
     minicon4.addView(v7);
     
-    std::cout << "Converted to Conjunctive Queries:\n";
+    cout << "Converted to Conjunctive Queries:\n";
     minicon4.printQuery();
     minicon4.printViews();
     
     auto rewritings4 = minicon4.rewrite();
     
-    std::cout << "\n=== Rewritings Found: " << rewritings4.size() << " ===\n";
+    cout << "\n=== Rewritings Found: " << rewritings4.size() << " ===\n";
     if (rewritings4.empty()) {
-        std::cout << "No valid rewriting exists!\n";
-        std::cout << "Reason: Views cannot cover all query subgoals and head variables.\n";
+        cout << "No valid rewriting exists!\n";
+        cout << "Reason: Views cannot cover all query subgoals and head variables.\n";
     }
     
     // Example 5: TPC-H style query
-    std::cout << "\n\n### Example 5: TPC-H Style Query ###\n";
-    std::cout << "------------------------------------\n";
+    cout << "\n\n### Example 5: TPC-H Style Query ###\n";
+    cout << "------------------------------------\n";
     
     std::string sql_q5 = "SELECT o.orderkey, c.name, l.quantity "
                         "FROM Orders o, Customer c, LineItem l "
@@ -902,10 +950,10 @@ int main() {
     std::string sql_v9 = "SELECT c.custkey, c.name FROM Customer c";
     std::string sql_v10 = "SELECT l.orderkey, l.quantity FROM LineItem l";
     
-    std::cout << "Query SQL:\n  " << sql_q5 << "\n";
-    std::cout << "View V8 SQL: " << sql_v8 << "\n";
-    std::cout << "View V9 SQL: " << sql_v9 << "\n";
-    std::cout << "View V10 SQL: " << sql_v10 << "\n\n";
+    cout << "Query SQL:\n  " << sql_q5 << "\n";
+    cout << "View V8 SQL: " << sql_v8 << "\n";
+    cout << "View V9 SQL: " << sql_v9 << "\n";
+    cout << "View V10 SQL: " << sql_v10 << "\n\n";
     
     MiniCon minicon5;
     ConjunctiveQuery q5 = converter.convert(sql_q5, "Q");
@@ -918,22 +966,25 @@ int main() {
     minicon5.addView(v9);
     minicon5.addView(v10);
     
-    std::cout << "Converted to Conjunctive Queries:\n";
+    cout << "Converted to Conjunctive Queries:\n";
     minicon5.printQuery();
     minicon5.printViews();
     
     auto rewritings5 = minicon5.rewrite();
     
-    std::cout << "\n=== Rewritings Found: " << rewritings5.size() << " ===\n";
+    cout << "\n=== Rewritings Found: " << rewritings5.size() << " ===\n";
     for (size_t i = 0; i < rewritings5.size(); ++i) {
-        std::cout << "\nRewriting " << i + 1 << ":\n";
-        std::cout << "  Conjunctive form: " << rewritings5[i].toString(minicon5.views) << "\n";
-        std::cout << "  SQL form: " << rewritings5[i].toSQL(minicon5.views, q5) << "\n";
+        cout << "\nRewriting " << i + 1 << ":\n";
+        cout << "  Conjunctive form: " << rewritings5[i].toString(minicon5.views) << "\n";
+        cout << "  SQL form: " << rewritings5[i].toSQL(minicon5.views, q5) << "\n";
     }
+    */
+
+    paperExample(converter);
     
-    std::cout << "\n=================================================\n";
-    std::cout << "         MiniCon Algorithm Completed\n";
-    std::cout << "=================================================\n";
+    cout << "\n=================================================\n";
+    cout << "         MiniCon Algorithm Completed\n";
+    cout << "=================================================\n";
     
     return 0;
 }
