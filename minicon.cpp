@@ -260,28 +260,34 @@ private:
     struct SQLParsed {
         vector<string> select_attrs;
         vector<string> tables;
-        vector<pair<string, string>> joins;
-        map<string, string> table_aliases;
+        vector<pair<string, string>> joins; // pairs of qualified names (left, right)
+        map<string, string> table_aliases;  // alias -> base table
     };
-    
+
+    // Toggle debug output
+    static constexpr bool DEBUG = true;
+
+    // Helper: lower-case & trim already exist in Utils; reuse them as needed.
+
+    // Parse a very small subset of SQL (SELECT ... FROM ... WHERE ... AND ...)
     SQLParsed parseSQL(const string& sql) {
         SQLParsed parsed;
         string sql_lower = Utils::toLower(sql);
-        
+
         // Find SELECT, FROM, WHERE positions
         size_t select_pos = sql_lower.find("select");
-        size_t from_pos = sql_lower.find("from");
-        size_t where_pos = sql_lower.find("where");
-        
+        size_t from_pos   = sql_lower.find("from");
+        size_t where_pos  = sql_lower.find("where");
+
         if (select_pos == string::npos || from_pos == string::npos) {
             cerr << "Invalid SQL: missing SELECT or FROM\n";
             return parsed;
         }
-        
+
         // Parse SELECT clause
         string select_clause = sql.substr(select_pos + 6, from_pos - select_pos - 6);
         parsed.select_attrs = Utils::split(select_clause, ',');
-        
+
         // Parse FROM clause
         string from_clause;
         if (where_pos != string::npos) {
@@ -289,25 +295,33 @@ private:
         } else {
             from_clause = sql.substr(from_pos + 4);
         }
-        
+
         auto table_parts = Utils::split(from_clause, ',');
         for (const auto& part : table_parts) {
             auto tokens = Utils::split(part, ' ');
-            if (tokens.size() >= 1) {
-                parsed.tables.push_back(tokens[0]);
-                if (tokens.size() >= 2) {
-                    // Handle alias (e.g., "Customer c" or "Customer AS c")
-                    string alias = tokens.back();
-                    parsed.table_aliases[alias] = tokens[0];
+            if (tokens.empty()) continue;
+            // tokens[0] is table name, optional last token is alias
+            string base = tokens[0];
+            string alias;
+            if (tokens.size() >= 2) {
+                // handle "AS"
+                if (tokens.size() >= 3 && Utils::toLower(tokens[tokens.size()-2]) == "as") {
+                    alias = tokens.back();
+                } else {
+                    alias = tokens.back();
                 }
             }
+            // store base and alias relationship
+            parsed.tables.push_back(base);
+            if (!alias.empty()) {
+                parsed.table_aliases[alias] = base;
+            }
         }
-        
-        // Parse WHERE clause
+
+        // Parse WHERE clause: only equality predicates combined with AND
         if (where_pos != string::npos) {
             string where_clause = sql.substr(where_pos + 5);
             auto predicates = Utils::split(where_clause, "AND");
-            
             for (const auto& pred : predicates) {
                 size_t eq_pos = pred.find('=');
                 if (eq_pos != string::npos) {
@@ -317,140 +331,190 @@ private:
                 }
             }
         }
-        
+
+        // Normalize: replace any alias mention in parsed.tables with base table name
+        for (auto &t : parsed.tables) {
+            if (parsed.table_aliases.find(t) != parsed.table_aliases.end()) {
+                t = parsed.table_aliases[t];
+            }
+        }
+
+        if (DEBUG) {
+            cerr << "DEBUG parseSQL:\n";
+            cerr << " Tables: ";
+            for (auto &t : parsed.tables) cerr << t << " ";
+            cerr << "\n Aliases:\n";
+            for (auto &kv : parsed.table_aliases) cerr << "  " << kv.first << " -> " << kv.second << "\n";
+            cerr << " Select attrs:\n";
+            for (auto &a : parsed.select_attrs) cerr << "  " << a << "\n";
+            cerr << " Joins:\n";
+            for (auto &j : parsed.joins) cerr << "  " << j.first << " = " << j.second << "\n";
+        }
+
         return parsed;
     }
-    
+
     // Extract table and attribute from qualified name (e.g., "customer.name" -> {"customer", "name"})
     pair<string, string> splitQualifiedName(const string& name) {
         size_t dot_pos = name.find('.');
         if (dot_pos != string::npos) {
-            return {name.substr(0, dot_pos), name.substr(dot_pos + 1)};
+            string left = Utils::trim(name.substr(0, dot_pos));
+            string right = Utils::trim(name.substr(dot_pos + 1));
+            return {left, right};
         }
-        return {"", name};
+        return {"", Utils::trim(name)};
     }
-    
-    // Generate variable name for an attribute
-    string generateVarName(const string& attr, 
-                               map<string, string>& attr_to_var,
-                               int& var_counter) {
-        if (attr_to_var.find(attr) != attr_to_var.end()) {
-            return attr_to_var[attr];
+
+    // Generate variable name for a canonical attribute key "Table.attr"
+    // Generate variable name for a canonical attribute key "Table.attr"
+    string generateVarName(const string& canonical_attr, map<string, string>& attr_to_var, int& var_counter) {
+        auto it = attr_to_var.find(canonical_attr);
+        if (it != attr_to_var.end()) return it->second;
+        // Make a deterministic variable name from canonical_attr, e.g., "Customer.name" -> "Customer_name"
+        string var = canonical_attr;
+        for (char &c : var) {
+            if (c == '.') c = '_';
+            // optionally sanitize other characters if needed
         }
-        
-        string var = "v" + to_string(var_counter++);
-        attr_to_var[attr] = var;
+        // ensure uniqueness (rare): if var already used as a value, append a counter
+        bool used = false;
+        for (const auto &kv : attr_to_var) {
+            if (kv.second == var) {
+                used = true;
+                break;
+            }
+        }
+        if (used) {
+            var += "_" + to_string(var_counter++);
+        }
+        attr_to_var[canonical_attr] = var;
         return var;
     }
-    
 public:
     ConjunctiveQuery convert(const string& sql, const string& query_name = "Q") {
         ConjunctiveQuery cq(query_name);
         SQLParsed parsed = parseSQL(sql);
-        
+
+        // If parsing failed or no tables, return an empty CQ
         if (parsed.tables.empty()) {
             return cq;
         }
-        
-        // Map attributes to variables
+
+        // --- PATCH A: normalize aliases to base table names (ensure parsed.tables contain base names)
+        // Already applied in parseSQL but double-check joins/aliases usage below.
+
+        // Map attributes to canonical variables: canonical key = BaseTable.attr
         map<string, string> attr_to_var;
         int var_counter = 1;
-        
-        // Build a map of which attributes belong to which tables
-        map<string, vector<string>> table_attrs;
-        
-        // Process SELECT attributes for head
-        for (const auto& attr : parsed.select_attrs) {
-            auto [table, attr_name] = splitQualifiedName(attr);
-            string var = generateVarName(attr, attr_to_var, var_counter);
-            cq.head.push_back(Term(var, true));
-            
-            if (!table.empty()) {
-                // Resolve alias if exists
-                if (parsed.table_aliases.find(table) != parsed.table_aliases.end()) {
-                    table = parsed.table_aliases[table];
-                }
-                table_attrs[table].push_back(attr_name);
+
+        // Step 1: Build mapping for SELECT attributes (head) using canonical keys
+        for (const auto& sel_attr : parsed.select_attrs) {
+            auto [tbl, attr_name] = splitQualifiedName(sel_attr);
+            // resolve alias if present
+            if (!tbl.empty() && parsed.table_aliases.find(tbl) != parsed.table_aliases.end()) {
+                tbl = parsed.table_aliases[tbl];
             }
+            string canonical_key;
+            if (!tbl.empty()) canonical_key = tbl + "." + attr_name;
+            else canonical_key = attr_name; // fallback
+
+            string var = generateVarName(canonical_key, attr_to_var, var_counter);
+            cq.head.push_back(Term(var, true));
         }
-        
-        // Process joins to determine which attributes belong to which tables
-        for (const auto& [left, right] : parsed.joins) {
+
+        // Step 2: Process joins -> ensure both sides map to same canonical variable
+        for (const auto& pr : parsed.joins) {
+            const string& left = pr.first;
+            const string& right = pr.second;
+
             auto [left_table, left_attr] = splitQualifiedName(left);
             auto [right_table, right_attr] = splitQualifiedName(right);
-            
+
             // Resolve aliases
-            if (parsed.table_aliases.find(left_table) != parsed.table_aliases.end()) {
+            if (!left_table.empty() && parsed.table_aliases.find(left_table) != parsed.table_aliases.end())
                 left_table = parsed.table_aliases[left_table];
-            }
-            if (parsed.table_aliases.find(right_table) != parsed.table_aliases.end()) {
+            if (!right_table.empty() && parsed.table_aliases.find(right_table) != parsed.table_aliases.end())
                 right_table = parsed.table_aliases[right_table];
-            }
-            
-            string left_var = generateVarName(left, attr_to_var, var_counter);
-            string right_var = generateVarName(right, attr_to_var, var_counter);
-            
-            // Make sure they map to the same variable (join condition)
-            if (left_var != right_var) {
-                // Update all occurrences of right_var to left_var
-                for (auto& [key, val] : attr_to_var) {
-                    if (val == right_var) {
-                        val = left_var;
-                    }
-                }
-                // Update head if necessary
-                for (auto& term : cq.head) {
-                    if (term.value == right_var) {
-                        term.value = left_var;
-                    }
-                }
-            }
-            
-            if (!left_table.empty()) {
-                table_attrs[left_table].push_back(left_attr);
-            }
-            if (!right_table.empty()) {
-                table_attrs[right_table].push_back(right_attr);
+
+            // If either side lacks explicit table (unqualified), we don't change it
+            string left_key  = (!left_table.empty())  ? left_table  + "." + left_attr  : left_attr;
+            string right_key = (!right_table.empty()) ? right_table + "." + right_attr : right_attr;
+
+            // Pick a canonical key deterministically (lexicographic or left_key)
+            string canonical_key = left_key; // left as canonical
+            // If neither key is present in attr_to_var yet, create canonical var.
+            string join_var = generateVarName(canonical_key, attr_to_var, var_counter);
+
+            // Force both sides to refer to the same variable
+            attr_to_var[left_key] = join_var;
+            attr_to_var[right_key] = join_var;
+        }
+
+        // Step 3: For any remaining select attributes or implied attributes that do not yet have a var, assign one
+        // This helps when select attributes aren't part of any join
+        for (const auto& sel_attr : parsed.select_attrs) {
+            auto [tbl, attr_name] = splitQualifiedName(sel_attr);
+            if (!tbl.empty() && parsed.table_aliases.find(tbl) != parsed.table_aliases.end())
+                tbl = parsed.table_aliases[tbl];
+            string canonical_key = (!tbl.empty()) ? tbl + "." + attr_name : attr_name;
+            if (attr_to_var.find(canonical_key) == attr_to_var.end()) {
+                generateVarName(canonical_key, attr_to_var, var_counter);
             }
         }
-        
-        // Create atoms for each table
+
+        // Step 4: Create atoms for each table deterministically using canonical attr_to_var keys
         for (const auto& table : parsed.tables) {
             string resolved_table = table;
             Atom atom(resolved_table);
-            
-            // Get all attributes for this table
-            set<string> table_vars;
-            for (const auto& [attr, var] : attr_to_var) {
-                auto [t, a] = splitQualifiedName(attr);
-                if (parsed.table_aliases.find(t) != parsed.table_aliases.end()) {
-                    t = parsed.table_aliases[t];
-                }
-                if (t == resolved_table || (t.empty() && table_attrs[resolved_table].empty())) {
-                    table_vars.insert(var);
-                }
-            }
-            
-            // If no specific attributes found, use all attributes that might belong here
-            if (table_vars.empty()) {
-                for (const auto& [attr, var] : attr_to_var) {
-                    auto [t, a] = splitQualifiedName(attr);
-                    if (t.empty()) {
-                        table_vars.insert(var);
+
+            // Collect canonical attributes that belong to this table (prefix "Table.")
+            vector<string> attrs_for_table;
+            for (const auto& kv : attr_to_var) {
+                const string& canonical_attr = kv.first; // e.g., Customer.nationkey
+                size_t dot = canonical_attr.find('.');
+                if (dot != string::npos) {
+                    string tname = canonical_attr.substr(0, dot);
+                    if (tname == resolved_table) {
+                        attrs_for_table.push_back(canonical_attr);
                     }
                 }
             }
-            
-            // Add terms to atom
-            for (const auto& var : table_vars) {
+
+            // Sort to keep deterministic order across query and views
+            sort(attrs_for_table.begin(), attrs_for_table.end());
+
+            // Add terms (variables) to atom in that deterministic order
+            for (const auto& canon : attrs_for_table) {
+                string var = attr_to_var[canon];
                 atom.addTerm(Term(var, true));
             }
-            
-            if (!atom.terms.empty()) {
-                cq.body.push_back(atom);
+
+            // If the table had no canonical attributes but it was listed in FROM, we add a single placeholder
+            // variable so the atom appears and MiniCon can try to map by relation name.
+            if (atom.terms.empty()) {
+                // create a placeholder var that is unique to this table in this query
+                string placeholder_canon = resolved_table + "._placeholder";
+                string pvar = generateVarName(placeholder_canon, attr_to_var, var_counter);
+                atom.addTerm(Term(pvar, true));
+            }
+
+            cq.body.push_back(atom);
+        }
+
+        // DEBUG dumps to help diagnose mismatches if rewrites are still 0
+        if (DEBUG) {
+            cerr << "DEBUG: attr_to_var for SQL (" << query_name << "):\n";
+            for (const auto &kv : attr_to_var) {
+                cerr << "  " << kv.first << " -> " << kv.second << "\n";
+            }
+            cerr << "DEBUG: Constructed atoms for " << query_name << ":\n";
+            for (const auto &atom : cq.body) {
+                cerr << "  " << atom.toString() << "  terms:";
+                for (const auto &t : atom.terms) cerr << " " << t.value;
+                cerr << "\n";
             }
         }
-        
+
         return cq;
     }
 };
@@ -603,41 +667,43 @@ public:
         }
     }
     
-    // Check if a combination of MCDs covers all subgoals and head variables
+    /// Check if a combination of MCDs covers all subgoals and head variables
     bool isValidRewriting(const vector<MCD>& mcd_combo) {
         set<int> all_covered;
         set<string> all_distinguished;
-        
+
         for (const auto& mcd : mcd_combo) {
-            all_covered.insert(mcd.covered_subgoals.begin(), 
+            all_covered.insert(mcd.covered_subgoals.begin(),
                              mcd.covered_subgoals.end());
-            all_distinguished.insert(mcd.distinguished_vars.begin(), 
+            all_distinguished.insert(mcd.distinguished_vars.begin(),
                                    mcd.distinguished_vars.end());
         }
-        
+
         // Check if all subgoals are covered
         if (all_covered.size() != query.body.size()) {
             return false;
         }
-        
-        // Check if all head variables are covered
+
+        // Check if all head variables are covered (require subset)
         auto query_head_vars = query.getHeadVariables();
-        if (all_distinguished != query_head_vars) {
-            return false;
+        for (const auto &hv : query_head_vars) {
+            if (all_distinguished.find(hv) == all_distinguished.end()) {
+                return false;
+            }
         }
-        
+
         // Check compatibility of mappings
         for (size_t i = 0; i < mcd_combo.size(); ++i) {
             for (size_t j = i + 1; j < mcd_combo.size(); ++j) {
-                if (!isConsistentMapping(mcd_combo[i].variable_mapping, 
+                if (!isConsistentMapping(mcd_combo[i].variable_mapping,
                                         mcd_combo[j].variable_mapping)) {
                     return false;
-                }
+                                        }
             }
         }
-        
         return true;
     }
+
     
     // Generate all combinations of MCDs
     void generateRewritings(vector<QueryRewriting>& rewritings) {
@@ -761,20 +827,15 @@ void paperExample(SQLToConjunctiveQuery converter) {
                          "WHERE c.nationkey = s.nationkey";
 
     cout << "Query SQL:\n  " << sql_q << "\n";
-    cout << "View V8 SQL: " << sql_v2 << "\n";
-    cout << "View V9 SQL: " << sql_v1 << "\n";
-    cout << "View V10 SQL: " << sql_v3 << "\n\n";
+    cout << "View V2 SQL: " << sql_v2 << "\n";
+    cout << "View V1 SQL: " << sql_v1 << "\n";
+    cout << "View V3 SQL: " << sql_v3 << "\n\n";
 
     MiniCon minicom;
     ConjunctiveQuery q = converter.convert(sql_q, "Q");
     ConjunctiveQuery v2 = converter.convert(sql_v2, "V2");
     ConjunctiveQuery v1 = converter.convert(sql_v1, "V1");
     ConjunctiveQuery v3 = converter.convert(sql_v3, "V3");
-
-    cout << q.toString() << endl;
-    cout << v2.toString() << endl;
-    cout << v1.toString() << endl;
-    cout << v3.toString() << endl;
 
     minicom.setQuery(q);
     minicom.addView(v2);
